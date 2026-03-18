@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Adaptive Learning Path</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Source+Serif+4:opsz,wght@8..60,400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="page-shell">
+        <header class="hero">
+            <div class="hero-copy">
+                <p class="eyebrow">Adaptive Quiz Studio</p>
+                <h1>Practice smarter with a quiz that grows with you.</h1>
+                <p class="hero-text">
+                    Sign in, build streaks, and keep a running history of how your understanding improves over time.
+                </p>
+            </div>
+            <div class="hero-stats">
+                <div class="hero-stat">
+                    <span class="hero-stat-label">Levels</span>
+                    <strong>3</strong>
+                </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-label">Accounts</span>
+                    <strong>Saved</strong>
+                </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-label">Progress</span>
+                    <strong>Tracked</strong>
+                </div>
+            </div>
+        </header>
+
+        <main class="app-card">
+            <section id="topic-selection-view" class="view active" aria-labelledby="topic-selection-heading">
+                <div class="section-heading">
+                    <div>
+                        <p class="section-kicker">Dashboard</p>
+                        <h2 id="topic-selection-heading">Pick a topic and keep your learning history</h2>
+                    </div>
+                    <p class="section-copy">
+                        Create an account or sign in to unlock quiz sessions, saved summaries, and recent scores.
+                    </p>
+                </div>
+
+                <div class="dashboard-layout">
+                    <section class="panel auth-panel" aria-labelledby="auth-heading">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="preview-label">Account</p>
+                                <h3 id="auth-heading">Sign in to save progress</h3>
+                            </div>
+                            <div id="user-badge" class="user-badge hidden"></div>
+                        </div>
+
+                        <p id="auth-status" class="muted">You are currently browsing as a guest.</p>
+                        <p id="auth-message" class="status-message hidden" aria-live="polite"></p>
+
+                        <div id="auth-forms" class="auth-forms">
+                            <form id="login-form" class="auth-form">
+                                <h4>Login</h4>
+                                <label class="field-label" for="login-username">Username</label>
+                                <input id="login-username" name="username" type="text" autocomplete="username" required>
+                                <label class="field-label" for="login-password">Password</label>
+                                <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+                                <button type="submit" class="btn btn-primary">Login</button>
+                            </form>
+
+                            <form id="register-form" class="auth-form">
+                                <h4>Create account</h4>
+                                <label class="field-label" for="register-username">Username</label>
+                                <input id="register-username" name="username" type="text" autocomplete="username" required>
+                                <label class="field-label" for="register-password">Password</label>
+                                <input id="register-password" name="password" type="password" autocomplete="new-password" required>
+                                <button type="submit" class="btn btn-secondary">Register</button>
+                            </form>
+                        </div>
+
+                        <div id="auth-actions" class="auth-actions hidden">
+                            <button id="logout-btn" type="button" class="btn btn-secondary">Logout</button>
+                        </div>
+                    </section>
+
+                    <section class="panel topic-panel">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="preview-label">Topic</p>
+                                <h3>Choose your learning lane</h3>
+                            </div>
+                        </div>
+
+                        <label class="field-label" for="topic-select">Topic</label>
+                        <select id="topic-select" aria-describedby="topic-help">
+                            <option value="">Loading topics...</option>
+                        </select>
+                        <p id="topic-help" class="field-help">
+                            Sign in first, then select a topic to preview the question mix and begin your quiz.
+                        </p>
+
+                        <aside class="topic-preview" aria-live="polite">
+                            <p class="preview-label">Topic snapshot</p>
+                            <h3 id="selected-topic-name">Choose a topic</h3>
+                            <p id="selected-topic-category" class="muted">Your personalized session details will appear here.</p>
+
+                            <div class="metric-grid">
+                                <article class="metric-card">
+                                    <span>Total Questions</span>
+                                    <strong id="topic-total-count">0</strong>
+                                </article>
+                                <article class="metric-card">
+                                    <span>Beginner</span>
+                                    <strong id="topic-beginner-count">0</strong>
+                                </article>
+                                <article class="metric-card">
+                                    <span>Intermediate</span>
+                                    <strong id="topic-intermediate-count">0</strong>
+                                </article>
+                                <article class="metric-card">
+                                    <span>Advanced</span>
+                                    <strong id="topic-advanced-count">0</strong>
+                                </article>
+                            </div>
+                        </aside>
+
+                        <button id="start-quiz-btn" class="btn btn-primary" disabled>Start adaptive quiz</button>
+                    </section>
+
+                    <section class="panel history-panel" aria-labelledby="history-heading">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="preview-label">History</p>
+                                <h3 id="history-heading">Recent scores</h3>
+                            </div>
+                        </div>
+
+                        <p id="history-empty" class="muted">Log in to see your recent quiz attempts here.</p>
+                        <div id="attempt-list" class="attempt-list"></div>
+                    </section>
+                </div>
+            </section>
+
+            <section id="quiz-view" class="view" aria-labelledby="quiz-topic-title">
+                <div id="quiz-header">
+                    <div class="quiz-heading-row">
+                        <div>
+                            <p class="section-kicker">Live Session</p>
+                            <h2 id="quiz-topic-title"></h2>
+                        </div>
+                        <div id="question-difficulty" class="difficulty-badge"></div>
+                    </div>
+
+                    <div class="session-overview">
+                        <div id="progress-container">
+                            <div id="progress-bar" aria-hidden="true">
+                                <div id="progress-bar-inner"></div>
+                            </div>
+                            <span id="progress-text">Question 1</span>
+                        </div>
+                        <div class="session-pills">
+                            <span class="session-pill">Accuracy <strong id="accuracy-pill">0%</strong></span>
+                            <span class="session-pill">Streak <strong id="streak-pill">0</strong></span>
+                        </div>
+                    </div>
+                </div>
+
+                <article id="question-card">
+                    <p id="question-text"></p>
+                    <div id="options-container" class="options-container"></div>
+                    <div id="feedback-container" class="feedback-container" aria-live="polite">
+                        <p id="feedback-title" class="feedback-title"></p>
+                        <p id="feedback-text"></p>
+                    </div>
+                </article>
+
+                <div class="quiz-footer">
+                    <button id="next-question-btn" class="btn btn-primary">Next question</button>
+                </div>
+            </section>
+
+            <section id="summary-view" class="view" aria-labelledby="summary-title">
+                <div class="section-heading">
+                    <div>
+                        <p class="section-kicker">Wrap Up</p>
+                        <h2 id="summary-title">Session complete</h2>
+                    </div>
+                    <p id="summary-topic-title" class="section-copy"></p>
+                </div>
+
+                <div id="summary-stats">
+                    <article class="stat-card">
+                        <h3>Overall Score</h3>
+                        <p id="summary-score" class="score">0%</p>
+                    </article>
+                    <article class="stat-card">
+                        <h3>Beginner</h3>
+                        <p id="summary-beginner" class="score">0%</p>
+                    </article>
+                    <article class="stat-card">
+                        <h3>Intermediate</h3>
+                        <p id="summary-intermediate" class="score">0%</p>
+                    </article>
+                    <article class="stat-card">
+                        <h3>Advanced</h3>
+                        <p id="summary-advanced" class="score">0%</p>
+                    </article>
+                </div>
+
+                <div class="summary-notes">
+                    <article class="note-card">
+                        <span>Questions Answered</span>
+                        <strong id="summary-answered">0</strong>
+                    </article>
+                    <article class="note-card">
+                        <span>Best Streak</span>
+                        <strong id="summary-streak">0</strong>
+                    </article>
+                    <article class="note-card">
+                        <span>Highest Level Reached</span>
+                        <strong id="summary-level">Beginner</strong>
+                    </article>
+                </div>
+
+                <p id="summary-save-status" class="status-message hidden" aria-live="polite"></p>
+
+                <div class="summary-footer">
+                    <button id="restart-btn" class="btn btn-primary">Back to dashboard</button>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>
