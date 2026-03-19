@@ -10,27 +10,81 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 </head>
 <body>
-    <div class="page-shell">
+    <section id="auth-screen" class="auth-screen">
+        <div class="auth-shell">
+            <div class="auth-hero">
+                <p class="eyebrow">Adaptive Quiz Studio</p>
+                <h1>Master core computer science, one sharp quiz at a time.</h1>
+                <p class="hero-text">
+                    Log in to unlock core CS subjects, keep streaks alive, and climb the leaderboard with every strong session.
+                </p>
+                <div class="auth-hero-pills">
+                    <span class="feature-pill">8 core subjects</span>
+                    <span class="feature-pill">Adaptive difficulty</span>
+                    <span class="feature-pill">Leaderboard ready</span>
+                </div>
+            </div>
+
+            <div class="auth-card">
+                <div class="panel-heading">
+                    <div>
+                        <p class="preview-label">Account Access</p>
+                        <h2>Start your run</h2>
+                    </div>
+                </div>
+
+                <p id="auth-status" class="muted">Login to continue to your quiz dashboard.</p>
+                <p id="auth-message" class="status-message hidden" aria-live="polite"></p>
+
+                <div id="auth-forms" class="auth-forms auth-forms-stacked">
+                    <form id="login-form" class="auth-form">
+                        <h4>Login</h4>
+                        <label class="field-label" for="login-username">Username</label>
+                        <input id="login-username" name="username" type="text" autocomplete="username" required>
+                        <label class="field-label" for="login-password">Password</label>
+                        <input id="login-password" name="password" type="password" autocomplete="current-password" required>
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </form>
+
+                    <form id="register-form" class="auth-form auth-form-accent">
+                        <h4>Create account</h4>
+                        <label class="field-label" for="register-username">Username</label>
+                        <input id="register-username" name="username" type="text" autocomplete="username" required>
+                        <label class="field-label" for="register-password">Password</label>
+                        <input id="register-password" name="password" type="password" autocomplete="new-password" required>
+                        <button type="submit" class="btn btn-secondary">Register</button>
+                    </form>
+                </div>
+
+                <div id="auth-actions" class="auth-actions hidden">
+                    <div id="user-badge" class="user-badge"></div>
+                    <button id="logout-btn" type="button" class="btn btn-secondary">Logout</button>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div id="app-shell" class="page-shell hidden">
         <header class="hero">
             <div class="hero-copy">
                 <p class="eyebrow">Adaptive Quiz Studio</p>
-                <h1>Practice smarter with a quiz that grows with you.</h1>
+                <h1>Build streaks. Own the leaderboard. Cover the full CS core.</h1>
                 <p class="hero-text">
-                    Sign in, build streaks, and keep a running history of how your understanding improves over time.
+                    Move through data structures, algorithms, operating systems, DBMS, networks, OOP, organization, and software engineering with adaptive quizzes and detailed review.
                 </p>
             </div>
             <div class="hero-stats">
+                <div class="hero-stat">
+                    <span class="hero-stat-label">Subjects</span>
+                    <strong>8</strong>
+                </div>
                 <div class="hero-stat">
                     <span class="hero-stat-label">Levels</span>
                     <strong>3</strong>
                 </div>
                 <div class="hero-stat">
-                    <span class="hero-stat-label">Accounts</span>
-                    <strong>Saved</strong>
-                </div>
-                <div class="hero-stat">
-                    <span class="hero-stat-label">Progress</span>
-                    <strong>Tracked</strong>
+                    <span class="hero-stat-label">Competition</span>
+                    <strong>Live board</strong>
                 </div>
             </div>
         </header>
@@ -40,71 +94,54 @@
                 <div class="section-heading">
                     <div>
                         <p class="section-kicker">Dashboard</p>
-                        <h2 id="topic-selection-heading">Pick a topic and keep your learning history</h2>
+                        <h2 id="topic-selection-heading">Choose a subject and start climbing</h2>
                     </div>
-                    <p class="section-copy">
-                        Create an account or sign in to unlock quiz sessions, saved summaries, and recent scores.
-                    </p>
+                    <div class="dashboard-user">
+                        <div id="dashboard-user-badge" class="user-badge"></div>
+                        <button id="dashboard-logout-btn" type="button" class="btn btn-secondary">Logout</button>
+                    </div>
                 </div>
 
-                <div class="dashboard-layout">
-                    <section class="panel auth-panel" aria-labelledby="auth-heading">
-                        <div class="panel-heading">
-                            <div>
-                                <p class="preview-label">Account</p>
-                                <h3 id="auth-heading">Sign in to save progress</h3>
-                            </div>
-                            <div id="user-badge" class="user-badge hidden"></div>
-                        </div>
+                <div class="streak-grid">
+                    <article class="streak-card">
+                        <span>Current Login Streak</span>
+                        <strong id="current-login-streak">1</strong>
+                    </article>
+                    <article class="streak-card">
+                        <span>Best Login Streak</span>
+                        <strong id="best-login-streak">1</strong>
+                    </article>
+                    <article class="streak-card">
+                        <span>Best Answer Streak</span>
+                        <strong id="best-answer-streak">0</strong>
+                    </article>
+                    <article class="streak-card">
+                        <span>Average Score</span>
+                        <strong id="average-score-streak">0%</strong>
+                    </article>
+                </div>
 
-                        <p id="auth-status" class="muted">You are currently browsing as a guest.</p>
-                        <p id="auth-message" class="status-message hidden" aria-live="polite"></p>
-
-                        <div id="auth-forms" class="auth-forms">
-                            <form id="login-form" class="auth-form">
-                                <h4>Login</h4>
-                                <label class="field-label" for="login-username">Username</label>
-                                <input id="login-username" name="username" type="text" autocomplete="username" required>
-                                <label class="field-label" for="login-password">Password</label>
-                                <input id="login-password" name="password" type="password" autocomplete="current-password" required>
-                                <button type="submit" class="btn btn-primary">Login</button>
-                            </form>
-
-                            <form id="register-form" class="auth-form">
-                                <h4>Create account</h4>
-                                <label class="field-label" for="register-username">Username</label>
-                                <input id="register-username" name="username" type="text" autocomplete="username" required>
-                                <label class="field-label" for="register-password">Password</label>
-                                <input id="register-password" name="password" type="password" autocomplete="new-password" required>
-                                <button type="submit" class="btn btn-secondary">Register</button>
-                            </form>
-                        </div>
-
-                        <div id="auth-actions" class="auth-actions hidden">
-                            <button id="logout-btn" type="button" class="btn btn-secondary">Logout</button>
-                        </div>
-                    </section>
-
+                <div class="dashboard-layout dashboard-layout-xl">
                     <section class="panel topic-panel">
                         <div class="panel-heading">
                             <div>
-                                <p class="preview-label">Topic</p>
-                                <h3>Choose your learning lane</h3>
+                                <p class="preview-label">Subjects</p>
+                                <h3>Browse the core CS map</h3>
                             </div>
                         </div>
 
-                        <label class="field-label" for="topic-select">Topic</label>
+                        <label class="field-label" for="topic-select">Subject</label>
                         <select id="topic-select" aria-describedby="topic-help">
                             <option value="">Loading topics...</option>
                         </select>
                         <p id="topic-help" class="field-help">
-                            Sign in first, then select a topic to preview the question mix and begin your quiz.
+                            Every subject includes beginner, intermediate, and advanced questions so the quiz can move with your performance.
                         </p>
 
                         <aside class="topic-preview" aria-live="polite">
-                            <p class="preview-label">Topic snapshot</p>
-                            <h3 id="selected-topic-name">Choose a topic</h3>
-                            <p id="selected-topic-category" class="muted">Your personalized session details will appear here.</p>
+                            <p class="preview-label">Subject snapshot</p>
+                            <h3 id="selected-topic-name">Choose a subject</h3>
+                            <p id="selected-topic-category" class="muted">Your session details will appear here.</p>
 
                             <div class="metric-grid">
                                 <article class="metric-card">
@@ -137,8 +174,20 @@
                             </div>
                         </div>
 
-                        <p id="history-empty" class="muted">Log in to see your recent quiz attempts here.</p>
+                        <p id="history-empty" class="muted">Finish a quiz to start building your history.</p>
                         <div id="attempt-list" class="attempt-list"></div>
+                    </section>
+
+                    <section class="panel leaderboard-panel" aria-labelledby="leaderboard-heading">
+                        <div class="panel-heading">
+                            <div>
+                                <p class="preview-label">Leaderboard</p>
+                                <h3 id="leaderboard-heading">Top performers</h3>
+                            </div>
+                        </div>
+
+                        <p id="leaderboard-empty" class="muted">Complete quizzes to populate the board.</p>
+                        <div id="leaderboard-list" class="leaderboard-list"></div>
                     </section>
                 </div>
             </section>
@@ -162,7 +211,8 @@
                         </div>
                         <div class="session-pills">
                             <span class="session-pill">Accuracy <strong id="accuracy-pill">0%</strong></span>
-                            <span class="session-pill">Streak <strong id="streak-pill">0</strong></span>
+                            <span class="session-pill">Live Streak <strong id="streak-pill">0</strong></span>
+                            <span class="session-pill">Best Run <strong id="quiz-best-streak-pill">0</strong></span>
                         </div>
                     </div>
                 </div>
@@ -196,16 +246,16 @@
                         <p id="summary-score" class="score">0%</p>
                     </article>
                     <article class="stat-card">
-                        <h3>Beginner</h3>
-                        <p id="summary-beginner" class="score">0%</p>
+                        <h3>Correct</h3>
+                        <p id="summary-correct" class="score">0</p>
                     </article>
                     <article class="stat-card">
-                        <h3>Intermediate</h3>
-                        <p id="summary-intermediate" class="score">0%</p>
+                        <h3>Wrong</h3>
+                        <p id="summary-wrong" class="score">0</p>
                     </article>
                     <article class="stat-card">
-                        <h3>Advanced</h3>
-                        <p id="summary-advanced" class="score">0%</p>
+                        <h3>Highest Level</h3>
+                        <p id="summary-level-badge" class="score score-small">Beginner</p>
                     </article>
                 </div>
 
@@ -219,10 +269,20 @@
                         <strong id="summary-streak">0</strong>
                     </article>
                     <article class="note-card">
-                        <span>Highest Level Reached</span>
-                        <strong id="summary-level">Beginner</strong>
+                        <span>Beginner / Intermediate / Advanced</span>
+                        <strong id="summary-breakdown">0% / 0% / 0%</strong>
                     </article>
                 </div>
+
+                <section class="review-section" aria-labelledby="review-title">
+                    <div class="panel-heading">
+                        <div>
+                            <p class="preview-label">Answer Review</p>
+                            <h3 id="review-title">See every question, your answer, and the explanation</h3>
+                        </div>
+                    </div>
+                    <div id="review-list" class="review-list"></div>
+                </section>
 
                 <p id="summary-save-status" class="status-message hidden" aria-live="polite"></p>
 

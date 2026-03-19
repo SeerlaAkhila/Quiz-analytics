@@ -3,6 +3,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const LEVEL_UP_THRESHOLD = 2;
     const LEVEL_DOWN_THRESHOLD = 2;
 
+    const authScreen = document.getElementById("auth-screen");
+    const appShell = document.getElementById("app-shell");
     const topicSelectionView = document.getElementById("topic-selection-view");
     const quizView = document.getElementById("quiz-view");
     const summaryView = document.getElementById("summary-view");
@@ -25,19 +27,29 @@ document.addEventListener("DOMContentLoaded", () => {
     const progressBarInner = document.getElementById("progress-bar-inner");
     const accuracyPill = document.getElementById("accuracy-pill");
     const streakPill = document.getElementById("streak-pill");
+    const quizBestStreakPill = document.getElementById("quiz-best-streak-pill");
     const nextQuestionBtn = document.getElementById("next-question-btn");
     const restartBtn = document.getElementById("restart-btn");
     const loginForm = document.getElementById("login-form");
     const registerForm = document.getElementById("register-form");
     const logoutBtn = document.getElementById("logout-btn");
+    const dashboardLogoutBtn = document.getElementById("dashboard-logout-btn");
     const authForms = document.getElementById("auth-forms");
     const authActions = document.getElementById("auth-actions");
     const authStatus = document.getElementById("auth-status");
     const authMessage = document.getElementById("auth-message");
     const userBadge = document.getElementById("user-badge");
+    const dashboardUserBadge = document.getElementById("dashboard-user-badge");
     const attemptList = document.getElementById("attempt-list");
     const historyEmpty = document.getElementById("history-empty");
+    const leaderboardList = document.getElementById("leaderboard-list");
+    const leaderboardEmpty = document.getElementById("leaderboard-empty");
     const summarySaveStatus = document.getElementById("summary-save-status");
+    const reviewList = document.getElementById("review-list");
+    const currentLoginStreak = document.getElementById("current-login-streak");
+    const bestLoginStreak = document.getElementById("best-login-streak");
+    const bestAnswerStreak = document.getElementById("best-answer-streak");
+    const averageScoreStreak = document.getElementById("average-score-streak");
 
     let topics = [];
     let selectedTopic = null;
@@ -54,6 +66,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let quizFinished = false;
     let currentUser = null;
     let history = {};
+    let answerLog = [];
 
     function createEmptyHistory() {
         return {
@@ -122,18 +135,36 @@ document.addEventListener("DOMContentLoaded", () => {
         element.classList.remove("error");
     }
 
-    function updateAuthUI() {
+    function setStreakDashboard(streaks = {}) {
+        currentLoginStreak.textContent = streaks.login_streak ?? (currentUser?.login_streak ?? 1);
+        bestLoginStreak.textContent = streaks.max_login_streak ?? (currentUser?.max_login_streak ?? 1);
+        bestAnswerStreak.textContent = streaks.longest_answer_streak ?? 0;
+        averageScoreStreak.textContent = `${streaks.average_score ?? 0}%`;
+    }
+
+    function setAppMode() {
         if (currentUser) {
-            authStatus.textContent = `Signed in as ${currentUser.username}. Your quiz attempts will be saved automatically.`;
-            userBadge.textContent = currentUser.username;
-            userBadge.classList.remove("hidden");
+            authScreen.classList.add("hidden");
+            appShell.classList.remove("hidden");
             authForms.classList.add("hidden");
-            authActions.classList.remove("hidden");
+            authActions.classList.add("hidden");
+            authStatus.textContent = `Signed in as ${currentUser.username}.`;
+            userBadge.textContent = currentUser.username;
+            dashboardUserBadge.textContent = currentUser.username;
+            setStreakDashboard({
+                login_streak: currentUser.login_streak,
+                max_login_streak: currentUser.max_login_streak,
+            });
         } else {
-            authStatus.textContent = "You are currently browsing as a guest.";
-            userBadge.classList.add("hidden");
+            appShell.classList.add("hidden");
+            authScreen.classList.remove("hidden");
             authForms.classList.remove("hidden");
             authActions.classList.add("hidden");
+            authStatus.textContent = "Login to continue to your quiz dashboard.";
+            userBadge.textContent = "";
+            dashboardUserBadge.textContent = "";
+            setStreakDashboard();
+            switchView(topicSelectionView);
         }
 
         startQuizBtn.disabled = !(currentUser && selectedTopic);
@@ -141,8 +172,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
     function updateTopicPreview(topic) {
         if (!topic) {
-            selectedTopicName.textContent = "Choose a topic";
-            selectedTopicCategory.textContent = "Your personalized session details will appear here.";
+            selectedTopicName.textContent = "Choose a subject";
+            selectedTopicCategory.textContent = "Your session details will appear here.";
             topicTotalCount.textContent = "0";
             topicBeginnerCount.textContent = "0";
             topicIntermediateCount.textContent = "0";
@@ -159,8 +190,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     function populateTopics() {
-        topicSelect.innerHTML = '<option value="">Select a topic</option>';
-
+        topicSelect.innerHTML = '<option value="">Select a subject</option>';
         topics.forEach((group) => {
             const optgroup = document.createElement("optgroup");
             optgroup.label = group.category;
@@ -206,7 +236,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const response = await fetch("/api/session");
             const payload = await response.json();
             currentUser = payload.user;
-            updateAuthUI();
+            setAppMode();
             if (currentUser) {
                 await fetchAttempts();
             } else {
@@ -220,6 +250,7 @@ document.addEventListener("DOMContentLoaded", () => {
     async function fetchAttempts() {
         if (!currentUser) {
             renderAttempts([]);
+            setStreakDashboard();
             return;
         }
 
@@ -227,7 +258,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const response = await fetch("/api/attempts");
             if (response.status === 401) {
                 currentUser = null;
-                updateAuthUI();
+                setAppMode();
                 renderAttempts([]);
                 return;
             }
@@ -237,24 +268,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const payload = await response.json();
             renderAttempts(payload.attempts || []);
+            setStreakDashboard(payload.streaks || {});
         } catch (error) {
             console.error(error);
             renderAttempts([]);
         }
     }
 
+    async function fetchLeaderboard() {
+        try {
+            const response = await fetch("/api/leaderboard");
+            if (!response.ok) {
+                throw new Error("Unable to load leaderboard");
+            }
+            const payload = await response.json();
+            renderLeaderboard(payload.leaderboard || []);
+        } catch (error) {
+            console.error(error);
+            renderLeaderboard([]);
+        }
+    }
+
     function renderAttempts(attempts) {
         attemptList.innerHTML = "";
 
-        if (!currentUser) {
-            historyEmpty.textContent = "Log in to see your recent quiz attempts here.";
+        if (!currentUser || !attempts.length) {
             historyEmpty.classList.remove("hidden");
-            return;
-        }
-
-        if (!attempts.length) {
-            historyEmpty.textContent = "No saved attempts yet. Finish a quiz to start building your history.";
-            historyEmpty.classList.remove("hidden");
+            historyEmpty.textContent = currentUser
+                ? "Finish a quiz to start building your history."
+                : "Login to see your recent quiz attempts here.";
             return;
         }
 
@@ -264,7 +306,7 @@ document.addEventListener("DOMContentLoaded", () => {
             card.className = "attempt-card";
             card.innerHTML = `
                 <h4>${attempt.topic_name}</h4>
-                <p>${attempt.category} • ${formatDate(attempt.created_at)}</p>
+                <p>${attempt.category} | ${formatDate(attempt.created_at)}</p>
                 <div class="attempt-meta">
                     <div><span>Overall</span><strong>${attempt.overall_score}%</strong></div>
                     <div><span>Questions</span><strong>${attempt.questions_answered}</strong></div>
@@ -273,6 +315,37 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
             `;
             attemptList.appendChild(card);
+        });
+    }
+
+    function renderLeaderboard(entries) {
+        leaderboardList.innerHTML = "";
+
+        if (!entries.length) {
+            leaderboardEmpty.classList.remove("hidden");
+            return;
+        }
+
+        leaderboardEmpty.classList.add("hidden");
+        entries.forEach((entry) => {
+            const row = document.createElement("article");
+            row.className = "leaderboard-row";
+            row.innerHTML = `
+                <div class="leaderboard-top">
+                    <div>
+                        <div class="leaderboard-name">${entry.username}</div>
+                        <p>Avg ${entry.average_score}% | Best ${entry.best_score}%</p>
+                    </div>
+                    <span class="leaderboard-rank">#${entry.rank}</span>
+                </div>
+                <div class="leaderboard-meta">
+                    <div><span>Answer Streak</span><strong>${entry.best_streak}</strong></div>
+                    <div><span>Attempts</span><strong>${entry.attempts}</strong></div>
+                    <div><span>Login Streak</span><strong>${entry.max_login_streak}</strong></div>
+                    <div><span>Momentum</span><strong>${entry.average_score + entry.best_streak}</strong></div>
+                </div>
+            `;
+            leaderboardList.appendChild(row);
         });
     }
 
@@ -285,6 +358,7 @@ document.addEventListener("DOMContentLoaded", () => {
         progressText.textContent = `Question ${Math.min(answeredCount + 1, totalQuestions || 1)} of ${totalQuestions || 0}`;
         accuracyPill.textContent = `${accuracy}%`;
         streakPill.textContent = `${currentStreak}`;
+        quizBestStreakPill.textContent = `${bestStreak}`;
     }
 
     function resetQuestionUI() {
@@ -369,6 +443,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
+    function logAnswer(question, selectedOption, isCorrect) {
+        answerLog.push({
+            difficulty: question.difficulty,
+            question_text: question.question_text,
+            selected_text: question.options[selectedOption - 1],
+            correct_text: question.options[question.correct_option - 1],
+            explanation: question.explanation || "No explanation available.",
+            is_correct: isCorrect,
+        });
+    }
+
     function handleAnswer(selectedOption) {
         const optionButtons = optionsContainer.querySelectorAll(".option-btn");
         optionButtons.forEach((button) => button.classList.add("disabled"));
@@ -388,16 +473,17 @@ document.addEventListener("DOMContentLoaded", () => {
 
         history[currentQuestion.difficulty].total += 1;
         questionsAsked += 1;
+        logAnswer(currentQuestion, selectedOption, isCorrect);
 
         if (isCorrect) {
             history[currentQuestion.difficulty].correct += 1;
             currentStreak += 1;
             bestStreak = Math.max(bestStreak, currentStreak);
-            feedbackTitle.textContent = "Nice work";
+            feedbackTitle.textContent = "Great run";
             feedbackContainer.classList.add("correct");
         } else {
             currentStreak = 0;
-            feedbackTitle.textContent = "Keep going";
+            feedbackTitle.textContent = "Reset and recover";
             feedbackContainer.classList.add("incorrect");
         }
 
@@ -408,6 +494,47 @@ document.addEventListener("DOMContentLoaded", () => {
 
         updateDifficultyAfterAnswer(isCorrect);
         updateProgress();
+    }
+
+    function renderReview() {
+        reviewList.innerHTML = "";
+
+        if (!answerLog.length) {
+            reviewList.innerHTML = "<p class='muted'>No review data available for this session.</p>";
+            return;
+        }
+
+        answerLog.forEach((entry, index) => {
+            const card = document.createElement("article");
+            card.className = "review-card";
+            card.innerHTML = `
+                <div class="panel-heading">
+                    <div>
+                        <p class="preview-label">Question ${index + 1}</p>
+                        <h4>${entry.question_text}</h4>
+                    </div>
+                    <span class="result-pill ${entry.is_correct ? "correct" : "incorrect"}">
+                        ${entry.is_correct ? "Correct" : "Wrong"}
+                    </span>
+                </div>
+                <div class="review-detail-grid">
+                    <div>
+                        <span>Difficulty</span>
+                        <strong>${entry.difficulty}</strong>
+                    </div>
+                    <div>
+                        <span>Your answer</span>
+                        <strong>${entry.selected_text}</strong>
+                    </div>
+                    <div>
+                        <span>Correct answer</span>
+                        <strong>${entry.correct_text}</strong>
+                    </div>
+                </div>
+                <p class="review-explanation">${entry.explanation}</p>
+            `;
+            reviewList.appendChild(card);
+        });
     }
 
     async function saveAttempt() {
@@ -434,7 +561,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (response.status === 401) {
                 currentUser = null;
-                updateAuthUI();
+                setAppMode();
                 showMessage(summarySaveStatus, "Your session expired before this result could be saved.", true);
                 return;
             }
@@ -444,8 +571,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 throw new Error(payload.error || "Unable to save attempt");
             }
 
-            showMessage(summarySaveStatus, "This score has been saved to your history.");
-            await fetchAttempts();
+            showMessage(summarySaveStatus, "This score has been saved to your history and leaderboard.");
+            await Promise.all([fetchAttempts(), fetchLeaderboard()]);
         } catch (error) {
             console.error(error);
             showMessage(summarySaveStatus, error.message, true);
@@ -454,14 +581,22 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function showSummary() {
         quizFinished = true;
+        const correctAnswers = getCorrectTotal();
+        const wrongAnswers = questionsAsked - correctAnswers;
+
         document.getElementById("summary-topic-title").textContent = `${selectedTopic.topic_name} in ${selectedTopic.category}`;
-        document.getElementById("summary-score").textContent = formatScore(getCorrectTotal(), questionsAsked);
-        document.getElementById("summary-beginner").textContent = formatScore(history.Beginner.correct, history.Beginner.total);
-        document.getElementById("summary-intermediate").textContent = formatScore(history.Intermediate.correct, history.Intermediate.total);
-        document.getElementById("summary-advanced").textContent = formatScore(history.Advanced.correct, history.Advanced.total);
+        document.getElementById("summary-score").textContent = formatScore(correctAnswers, questionsAsked);
+        document.getElementById("summary-correct").textContent = String(correctAnswers);
+        document.getElementById("summary-wrong").textContent = String(wrongAnswers);
+        document.getElementById("summary-level-badge").textContent = highestLevelReached;
         document.getElementById("summary-answered").textContent = String(questionsAsked);
         document.getElementById("summary-streak").textContent = String(bestStreak);
-        document.getElementById("summary-level").textContent = highestLevelReached;
+        document.getElementById("summary-breakdown").textContent = [
+            formatScore(history.Beginner.correct, history.Beginner.total),
+            formatScore(history.Intermediate.correct, history.Intermediate.total),
+            formatScore(history.Advanced.correct, history.Advanced.total),
+        ].join(" / ");
+        renderReview();
         hideMessage(summarySaveStatus);
         switchView(summaryView);
         await saveAttempt();
@@ -480,17 +615,15 @@ document.addEventListener("DOMContentLoaded", () => {
         highestLevelReached = "Beginner";
         quizFinished = false;
         history = createEmptyHistory();
+        answerLog = [];
         resetQuestionUI();
         updateProgress();
         hideMessage(summarySaveStatus);
+        reviewList.innerHTML = "";
     }
 
     async function startQuiz() {
-        if (!currentUser) {
-            showMessage(authMessage, "Please log in before starting a quiz.", true);
-            return;
-        }
-        if (!selectedTopic) {
+        if (!currentUser || !selectedTopic) {
             return;
         }
 
@@ -498,7 +631,7 @@ document.addEventListener("DOMContentLoaded", () => {
             const response = await fetch(`/api/questions/${selectedTopic.topic_id}`);
             if (response.status === 401) {
                 currentUser = null;
-                updateAuthUI();
+                setAppMode();
                 showMessage(authMessage, "Your session expired. Please log in again.", true);
                 return;
             }
@@ -509,7 +642,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
             const payload = await response.json();
             questionBank = {};
-
             DIFFICULTIES.forEach((difficulty) => {
                 questionBank[difficulty] = shuffle(payload.questions[difficulty] || []);
             });
@@ -517,6 +649,7 @@ document.addEventListener("DOMContentLoaded", () => {
             totalQuestions = Object.values(payload.question_counts).reduce((sum, count) => sum + count, 0);
             currentDifficulty = "Beginner";
             history = createEmptyHistory();
+            answerLog = [];
             currentQuestion = null;
             questionsAsked = 0;
             correctStreak = 0;
@@ -532,7 +665,6 @@ document.addEventListener("DOMContentLoaded", () => {
             loadNextQuestion();
         } catch (error) {
             console.error(error);
-            showMessage(authMessage, error.message, true);
         }
     }
 
@@ -555,9 +687,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
             currentUser = payload.user;
             form.reset();
-            updateAuthUI();
+            setAppMode();
             showMessage(authMessage, successMessage || payload.message || "Authentication successful.");
-            await fetchAttempts();
+            await Promise.all([fetchAttempts(), fetchLeaderboard()]);
         } catch (error) {
             console.error(error);
             showMessage(authMessage, error.message, true);
@@ -573,42 +705,43 @@ document.addEventListener("DOMContentLoaded", () => {
 
         currentUser = null;
         selectedTopic = findSelectedTopic(topicSelect.value);
-        updateAuthUI();
-        renderAttempts([]);
         resetAppState();
-        switchView(topicSelectionView);
+        renderAttempts([]);
+        setAppMode();
         showMessage(authMessage, "You have been logged out.");
     }
 
     topicSelect.addEventListener("change", () => {
         selectedTopic = findSelectedTopic(topicSelect.value);
         updateTopicPreview(selectedTopic);
-        updateAuthUI();
+        startQuizBtn.disabled = !(currentUser && selectedTopic);
     });
 
     startQuizBtn.addEventListener("click", startQuiz);
     nextQuestionBtn.addEventListener("click", loadNextQuestion);
-    restartBtn.addEventListener("click", () => {
+    restartBtn.addEventListener("click", async () => {
         resetAppState();
         switchView(topicSelectionView);
-        fetchAttempts();
+        await Promise.all([fetchAttempts(), fetchLeaderboard()]);
     });
 
     loginForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        await submitAuthForm("/api/login", loginForm, "Welcome back. Your history is ready.");
+        await submitAuthForm("/api/login", loginForm, "Welcome back. Your streak and leaderboard position are ready.");
     });
 
     registerForm.addEventListener("submit", async (event) => {
         event.preventDefault();
-        await submitAuthForm("/api/register", registerForm, "Account created. You're ready to start learning.");
+        await submitAuthForm("/api/register", registerForm, "Account created. Your streak starts now.");
     });
 
     logoutBtn.addEventListener("click", logout);
+    dashboardLogoutBtn.addEventListener("click", logout);
 
     history = createEmptyHistory();
     updateTopicPreview(null);
     updateProgress();
     fetchTopics();
     fetchSession();
+    fetchLeaderboard();
 });

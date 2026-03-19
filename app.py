@@ -1,3 +1,4 @@
+from datetime import date, datetime
 from functools import wraps
 import os
 
@@ -19,7 +20,6 @@ database.init_app(app)
 
 
 def query_db(query, args=(), one=False):
-    """Query the database and optionally return a single row."""
     cur = database.get_db().execute(query, args)
     rows = cur.fetchall()
     cur.close()
@@ -27,15 +27,24 @@ def query_db(query, args=(), one=False):
 
 
 def execute_db(query, args=()):
-    """Execute a write query and commit the transaction."""
     db = database.get_db()
     cur = db.execute(query, args)
     db.commit()
     return cur
 
 
+def ensure_column(table_name, column_name, column_sql):
+    db = database.get_db()
+    columns = {
+        row["name"]
+        for row in db.execute(f"PRAGMA table_info({table_name})").fetchall()
+    }
+    if column_name not in columns:
+        db.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_sql}")
+        db.commit()
+
+
 def ensure_auth_tables():
-    """Create authentication and attempt history tables when missing."""
     db = database.get_db()
     db.executescript(
         """
@@ -68,15 +77,57 @@ def ensure_auth_tables():
     )
     db.commit()
 
+    ensure_column("Users", "login_streak", "INTEGER NOT NULL DEFAULT 1")
+    ensure_column("Users", "max_login_streak", "INTEGER NOT NULL DEFAULT 1")
+    ensure_column("Users", "last_login_date", "TEXT")
+
 
 def current_user():
     user_id = session.get("user_id")
     if not user_id:
         return None
     return query_db(
-        "SELECT user_id, username, created_at FROM Users WHERE user_id = ?",
+        """
+        SELECT user_id, username, created_at, login_streak, max_login_streak, last_login_date
+        FROM Users
+        WHERE user_id = ?
+        """,
         [user_id],
         one=True,
+    )
+
+
+def update_login_streak(user_id):
+    user = query_db(
+        "SELECT login_streak, max_login_streak, last_login_date FROM Users WHERE user_id = ?",
+        [user_id],
+        one=True,
+    )
+
+    today = date.today()
+    today_str = today.isoformat()
+    last_login_raw = user["last_login_date"]
+
+    if not last_login_raw:
+        new_streak = 1
+    else:
+        last_login = datetime.strptime(last_login_raw, "%Y-%m-%d").date()
+        delta_days = (today - last_login).days
+        if delta_days == 0:
+            new_streak = user["login_streak"]
+        elif delta_days == 1:
+            new_streak = user["login_streak"] + 1
+        else:
+            new_streak = 1
+
+    new_max_streak = max(new_streak, user["max_login_streak"] or 1)
+    execute_db(
+        """
+        UPDATE Users
+        SET login_streak = ?, max_login_streak = ?, last_login_date = ?
+        WHERE user_id = ?
+        """,
+        [new_streak, new_max_streak, today_str, user_id],
     )
 
 
@@ -98,6 +149,9 @@ def serialize_user(user):
         "user_id": user["user_id"],
         "username": user["username"],
         "created_at": user["created_at"],
+        "login_streak": user["login_streak"] or 1,
+        "max_login_streak": user["max_login_streak"] or 1,
+        "last_login_date": user["last_login_date"],
     }
 
 
@@ -130,15 +184,20 @@ def register():
     if existing_user is not None:
         return jsonify({"error": "That username is already taken."}), 409
 
+    today_str = date.today().isoformat()
     cursor = execute_db(
-        "INSERT INTO Users (username, password_hash) VALUES (?, ?)",
-        [username, generate_password_hash(password)],
+        """
+        INSERT INTO Users (
+            username, password_hash, login_streak, max_login_streak, last_login_date
+        )
+        VALUES (?, ?, 1, 1, ?)
+        """,
+        [username, generate_password_hash(password), today_str],
     )
     session.clear()
     session["user_id"] = cursor.lastrowid
 
-    user = current_user()
-    return jsonify({"message": "Account created.", "user": serialize_user(user)}), 201
+    return jsonify({"message": "Account created.", "user": serialize_user(current_user())}), 201
 
 
 @app.route("/api/login", methods=["POST"])
@@ -148,25 +207,21 @@ def login():
     password = payload.get("password") or ""
 
     user = query_db(
-        "SELECT user_id, username, password_hash, created_at FROM Users WHERE lower(username) = lower(?)",
+        """
+        SELECT user_id, username, password_hash
+        FROM Users
+        WHERE lower(username) = lower(?)
+        """,
         [username],
         one=True,
     )
     if user is None or not check_password_hash(user["password_hash"], password):
         return jsonify({"error": "Invalid username or password."}), 401
 
+    update_login_streak(user["user_id"])
     session.clear()
     session["user_id"] = user["user_id"]
-    return jsonify(
-        {
-            "message": "Signed in successfully.",
-            "user": {
-                "user_id": user["user_id"],
-                "username": user["username"],
-                "created_at": user["created_at"],
-            },
-        }
-    )
+    return jsonify({"message": "Signed in successfully.", "user": serialize_user(current_user())})
 
 
 @app.route("/api/logout", methods=["POST"])
@@ -177,7 +232,6 @@ def logout():
 
 @app.route("/api/topics")
 def get_topics():
-    """Return available quiz topics with question counts per difficulty."""
     topics = query_db(
         """
         SELECT
@@ -212,17 +266,14 @@ def get_topics():
             }
         )
 
-    payload = [
-        {"category": category, "topics": items}
-        for category, items in grouped_topics.items()
-    ]
-    return jsonify(payload)
+    return jsonify(
+        [{"category": category, "topics": items} for category, items in grouped_topics.items()]
+    )
 
 
 @app.route("/api/questions/<int:topic_id>")
 @login_required
 def get_questions(user, topic_id):
-    """Return one topic with all of its questions grouped by difficulty."""
     topic = query_db(
         "SELECT topic_id, topic_name, category FROM Topics WHERE topic_id = ?",
         [topic_id],
@@ -249,12 +300,7 @@ def get_questions(user, topic_id):
                 "question_id": row["question_id"],
                 "difficulty": row["difficulty"],
                 "question_text": row["question_text"],
-                "options": [
-                    row["option1"],
-                    row["option2"],
-                    row["option3"],
-                    row["option4"],
-                ],
+                "options": [row["option1"], row["option2"], row["option3"], row["option4"]],
                 "correct_option": row["correct_option"],
                 "explanation": row["explanation"],
             }
@@ -268,8 +314,7 @@ def get_questions(user, topic_id):
                 "category": topic["category"],
             },
             "question_counts": {
-                difficulty: len(grouped_questions[difficulty])
-                for difficulty in DIFFICULTIES
+                difficulty: len(grouped_questions[difficulty]) for difficulty in DIFFICULTIES
             },
             "questions": grouped_questions,
         }
@@ -302,6 +347,20 @@ def get_attempts(user):
         [user["user_id"]],
     )
 
+    streak_summary = query_db(
+        """
+        SELECT
+            COUNT(*) AS attempt_count,
+            MAX(best_streak) AS longest_answer_streak,
+            AVG(overall_score) AS average_score,
+            MAX(overall_score) AS best_score
+        FROM QuizAttempts
+        WHERE user_id = ?
+        """,
+        [user["user_id"]],
+        one=True,
+    )
+
     return jsonify(
         {
             "attempts": [
@@ -319,7 +378,15 @@ def get_attempts(user):
                     "created_at": attempt["created_at"],
                 }
                 for attempt in attempts
-            ]
+            ],
+            "streaks": {
+                "login_streak": user["login_streak"] or 1,
+                "max_login_streak": user["max_login_streak"] or 1,
+                "longest_answer_streak": streak_summary["longest_answer_streak"] or 0,
+                "attempt_count": streak_summary["attempt_count"] or 0,
+                "average_score": round(streak_summary["average_score"] or 0),
+                "best_score": streak_summary["best_score"] or 0,
+            },
         }
     )
 
@@ -328,7 +395,6 @@ def get_attempts(user):
 @login_required
 def save_attempt(user):
     payload = request.get_json(silent=True) or {}
-
     topic_id = payload.get("topic_id")
     overall_score = payload.get("overall_score")
     beginner_score = payload.get("beginner_score")
@@ -355,7 +421,7 @@ def save_attempt(user):
         """,
         [
             user["user_id"],
-            topic_id,
+            int(topic_id),
             int(overall_score),
             int(beginner_score),
             int(intermediate_score),
@@ -367,6 +433,42 @@ def save_attempt(user):
     )
 
     return jsonify({"message": "Attempt saved."}), 201
+
+
+@app.route("/api/leaderboard")
+def get_leaderboard():
+    rows = query_db(
+        """
+        SELECT
+            u.username,
+            COALESCE(ROUND(AVG(a.overall_score)), 0) AS average_score,
+            COALESCE(MAX(a.overall_score), 0) AS best_score,
+            COALESCE(MAX(a.best_streak), 0) AS best_streak,
+            COUNT(a.attempt_id) AS attempts,
+            COALESCE(u.max_login_streak, 1) AS max_login_streak
+        FROM Users u
+        LEFT JOIN QuizAttempts a ON a.user_id = u.user_id
+        GROUP BY u.user_id, u.username, u.max_login_streak
+        HAVING COUNT(a.attempt_id) > 0
+        ORDER BY average_score DESC, best_streak DESC, attempts DESC, u.username ASC
+        LIMIT 10
+        """
+    )
+
+    leaderboard = []
+    for index, row in enumerate(rows, start=1):
+        leaderboard.append(
+            {
+                "rank": index,
+                "username": row["username"],
+                "average_score": row["average_score"],
+                "best_score": row["best_score"],
+                "best_streak": row["best_streak"],
+                "attempts": row["attempts"],
+                "max_login_streak": row["max_login_streak"],
+            }
+        )
+    return jsonify({"leaderboard": leaderboard})
 
 
 @app.route("/")
